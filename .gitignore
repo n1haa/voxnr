@@ -1,0 +1,41 @@
+# Python
+vox-backend/.venv/
+vox-backend/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.log
+
+# Node
+vox-frontend/node_modules/
+vox-frontend/dist/
+vox-frontend/.vite/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Misc
+CACHEDIR.TAG
+pyenv.cfg
