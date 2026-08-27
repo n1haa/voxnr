@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
 import { 
   Building, 
   User, 
   Mail, 
-  ShieldCheck, 
   Info, 
   BarChart3, 
   UploadCloud, 
@@ -23,6 +23,7 @@ interface Company {
 
 const authMode = ref<'login' | 'register'>('register')
 const isLoading = ref<boolean>(false)
+const route = useRoute()
 
 // Список привязанных/доступных компаний
 const availableCompanies = ref<Company[]>([
@@ -78,7 +79,7 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-center items-center p-4 md:p-8">
+  <div v-if="route.name === 'employee-auth'" class="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-center items-center p-4 md:p-8">
     <div class="max-w-2xl w-full bg-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl border border-slate-600">
       
       <!-- Шапка с переключателем режима -->
@@ -236,4 +237,5 @@ const handleSubmit = () => {
       </form>
     </div>
   </div>
+  <RouterView v-else />
 </template>
