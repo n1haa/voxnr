@@ -1,14 +1,30 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+)
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_password
+from app.api.dependencies import get_current_user
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
 from app.db.database import get_db
 from app.models.company import Company
 from app.models.user import User, UserRole
 from app.schemas.auth import (
+    RefreshTokenRequest,
     RegisterCompanyRequest,
     RegisterCompanyResponse,
+    TokenResponse,
+    UserMeResponse,
 )
 
 
@@ -81,4 +97,140 @@ async def register_company(
         user_id=user.id,
         email=user.email,
         role=user.role.value,
+    )
+
+
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+)
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    user_query = select(User).where(
+        User.email == form_data.username
+    )
+
+    user_result = await db.execute(user_query)
+
+    user = user_result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={
+                "WWW-Authenticate": "Bearer",
+            },
+        )
+
+    if not verify_password(
+        form_data.password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={
+                "WWW-Authenticate": "Bearer",
+            },
+        )
+
+    access_token = create_access_token(
+        user_id=user.id,
+        company_id=user.company_id,
+        role=user.role.value,
+    )
+
+    refresh_token = create_refresh_token(
+        user_id=user.id,
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
+
+
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+)
+async def refresh_tokens(
+    data: RefreshTokenRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        payload = decode_token(data.refresh_token)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    user_id = payload.get("sub")
+
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    user = await db.get(
+        User,
+        user_id,
+    )
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    access_token = create_access_token(
+        user_id=user.id,
+        company_id=user.company_id,
+        role=user.role.value,
+    )
+
+    refresh_token = create_refresh_token(
+        user_id=user.id,
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
+
+
+@router.get(
+    "/me",
+    response_model=UserMeResponse,
+)
+async def get_me(
+    current_user: User = Depends(get_current_user),
+):
+    return UserMeResponse(
+        id=current_user.id,
+        company_id=current_user.company_id,
+        full_name=current_user.full_name,
+        email=current_user.email,
+        role=current_user.role.value,
     )

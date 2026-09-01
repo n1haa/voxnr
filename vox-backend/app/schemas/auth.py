@@ -30,3 +30,21 @@ class RegisterCompanyResponse(BaseModel):
     user_id: int
     email: EmailStr
     role: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class UserMeResponse(BaseModel):
+    id: int
+    company_id: int
+    full_name: str
+    email: EmailStr
+    role: str
