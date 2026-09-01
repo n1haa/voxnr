@@ -5,7 +5,7 @@ from fastapi import (
     Response,
     status,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -13,6 +13,7 @@ from app.api.dependencies import (
     require_roles,
 )
 from app.db.database import get_db
+from app.models.dialogue import Dialogue, DialogueStatus
 from app.models.project import Project
 from app.models.user import User, UserRole
 from app.schemas.project import (
@@ -27,7 +28,7 @@ router = APIRouter()
 
 def build_project_response(
     project: Project,
-    dialogue_count: int = 0,
+    dialogue_count: int,
 ) -> ProjectResponse:
     project_status = (
         "ready"
@@ -45,6 +46,22 @@ def build_project_response(
         status=project_status,
         created_at=project.created_at,
     )
+
+
+async def get_completed_dialogue_count(
+    project_id: int,
+    db: AsyncSession,
+) -> int:
+    query = select(
+        func.count(Dialogue.id)
+    ).where(
+        Dialogue.project_id == project_id,
+        Dialogue.status == DialogueStatus.COMPLETED,
+    )
+
+    result = await db.execute(query)
+
+    return result.scalar_one()
 
 
 @router.post(
@@ -100,13 +117,22 @@ async def get_projects(
 
     projects = result.scalars().all()
 
-    return [
-        build_project_response(
-            project=project,
-            dialogue_count=0,
+    responses = []
+
+    for project in projects:
+        dialogue_count = await get_completed_dialogue_count(
+            project_id=project.id,
+            db=db,
         )
-        for project in projects
-    ]
+
+        responses.append(
+            build_project_response(
+                project=project,
+                dialogue_count=dialogue_count,
+            )
+        )
+
+    return responses
 
 
 @router.get(
@@ -133,9 +159,14 @@ async def get_project(
             detail="Project not found",
         )
 
+    dialogue_count = await get_completed_dialogue_count(
+        project_id=project.id,
+        db=db,
+    )
+
     return build_project_response(
         project=project,
-        dialogue_count=0,
+        dialogue_count=dialogue_count,
     )
 
 
@@ -183,9 +214,14 @@ async def update_project(
     await db.commit()
     await db.refresh(project)
 
+    dialogue_count = await get_completed_dialogue_count(
+        project_id=project.id,
+        db=db,
+    )
+
     return build_project_response(
         project=project,
-        dialogue_count=0,
+        dialogue_count=dialogue_count,
     )
 
 

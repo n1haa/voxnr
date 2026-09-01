@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
+from app.api.dialogues import router as dialogues_router
 from app.api.health import router as health_router
 from app.api.projects import router as projects_router
 from app.api.rbac import router as rbac_router
@@ -48,4 +49,11 @@ app.include_router(
     projects_router,
     prefix="/api/v1/projects",
     tags=["Projects"],
+)
+
+
+app.include_router(
+    dialogues_router,
+    prefix="/api/v1",
+    tags=["Dialogues"],
 )
