@@ -32,6 +32,7 @@ from app.services.storage import (
     generate_download_url,
     upload_file_to_storage,
 )
+from app.tasks.dialogue_tasks import process_dialogue
 
 
 router = APIRouter()
@@ -96,15 +97,13 @@ async def get_dialogue_for_user(
         .join(Project)
         .where(
             Dialogue.id == dialogue_id,
-            Project.company_id
-            == current_user.company_id,
+            Project.company_id == current_user.company_id,
         )
     )
 
     if current_user.role == UserRole.SALES:
         query = query.where(
-            Dialogue.uploaded_by
-            == current_user.id
+            Dialogue.uploaded_by == current_user.id
         )
 
     result = await db.execute(query)
@@ -193,6 +192,25 @@ async def upload_dialogue(
 
         raise
 
+    try:
+        process_dialogue.delay(
+            dialogue.id
+        )
+
+    except Exception as exc:
+        dialogue.status = DialogueStatus.ERROR
+        dialogue.error_message = (
+            "Failed to enqueue dialogue processing"
+        )
+
+        await db.commit()
+        await db.refresh(dialogue)
+
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Processing queue is unavailable",
+        ) from exc
+
     return build_dialogue_response(
         dialogue
     )
@@ -233,8 +251,7 @@ async def get_project_dialogues(
 
     if current_user.role == UserRole.SALES:
         query = query.where(
-            Dialogue.uploaded_by
-            == current_user.id
+            Dialogue.uploaded_by == current_user.id
         )
 
     result = await db.execute(query)
