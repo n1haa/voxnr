@@ -26,8 +26,14 @@ class Settings:
     S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL")
     S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
     S3_SECRET_KEY = os.getenv("S3_SECRET_KEY")
-    S3_BUCKET = os.getenv("S3_BUCKET", "voxnr-dialogues")
-    S3_REGION = os.getenv("S3_REGION", "us-east-1")
+    S3_BUCKET = os.getenv(
+        "S3_BUCKET",
+        "voxnr-dialogues",
+    )
+    S3_REGION = os.getenv(
+        "S3_REGION",
+        "us-east-1",
+    )
     S3_ADDRESSING_STYLE = os.getenv(
         "S3_ADDRESSING_STYLE",
         "path",
@@ -42,6 +48,11 @@ class Settings:
 
     S3_SERVER_SIDE_ENCRYPTION = os.getenv(
         "S3_SERVER_SIDE_ENCRYPTION",
+    )
+
+    CELERY_BROKER_URL = os.getenv(
+        "CELERY_BROKER_URL",
+        "redis://127.0.0.1:6379/0",
     )
 
 
