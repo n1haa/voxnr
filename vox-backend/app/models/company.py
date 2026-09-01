@@ -8,6 +8,7 @@ from app.db.database import Base
 
 
 if TYPE_CHECKING:
+    from app.models.project import Project
     from app.models.user import User
 
 
@@ -36,6 +37,11 @@ class Company(Base):
     )
 
     users: Mapped[list["User"]] = relationship(
+        back_populates="company",
+        cascade="all, delete-orphan",
+    )
+
+    projects: Mapped[list["Project"]] = relationship(
         back_populates="company",
         cascade="all, delete-orphan",
     )
