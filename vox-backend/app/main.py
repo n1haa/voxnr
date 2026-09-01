@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.rbac import router as rbac_router
 from app.core.config import settings
 
 
@@ -32,4 +33,11 @@ app.include_router(
     auth_router,
     prefix="/api/v1/auth",
     tags=["Auth"],
+)
+
+
+app.include_router(
+    rbac_router,
+    prefix="/api/v1/rbac",
+    tags=["RBAC"],
 )
