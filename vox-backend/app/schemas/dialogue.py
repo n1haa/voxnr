@@ -21,3 +21,8 @@ class DialogueResponse(BaseModel):
     status: str
     error_message: str | None
     created_at: datetime
+
+
+class DialogueDownloadUrlResponse(BaseModel):
+    url: str
+    expires_in: int

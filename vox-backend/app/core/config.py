@@ -23,5 +23,26 @@ class Settings:
         os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")
     )
 
+    S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL")
+    S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
+    S3_SECRET_KEY = os.getenv("S3_SECRET_KEY")
+    S3_BUCKET = os.getenv("S3_BUCKET", "voxnr-dialogues")
+    S3_REGION = os.getenv("S3_REGION", "us-east-1")
+    S3_ADDRESSING_STYLE = os.getenv(
+        "S3_ADDRESSING_STYLE",
+        "path",
+    )
+
+    S3_PRESIGNED_URL_EXPIRE_SECONDS = int(
+        os.getenv(
+            "S3_PRESIGNED_URL_EXPIRE_SECONDS",
+            "900",
+        )
+    )
+
+    S3_SERVER_SIDE_ENCRYPTION = os.getenv(
+        "S3_SERVER_SIDE_ENCRYPTION",
+    )
+
 
 settings = Settings()

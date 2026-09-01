@@ -14,6 +14,7 @@ from app.api.dependencies import (
     get_current_user,
     require_roles,
 )
+from app.core.config import settings
 from app.db.database import get_db
 from app.models.dialogue import (
     Dialogue,
@@ -22,11 +23,38 @@ from app.models.dialogue import (
 )
 from app.models.project import Project
 from app.models.user import User, UserRole
-from app.schemas.dialogue import DialogueResponse
-from app.services.storage import save_upload_file
+from app.schemas.dialogue import (
+    DialogueDownloadUrlResponse,
+    DialogueResponse,
+)
+from app.services.storage import (
+    delete_file_from_storage,
+    generate_download_url,
+    upload_file_to_storage,
+)
 
 
 router = APIRouter()
+
+
+def build_dialogue_response(
+    dialogue: Dialogue,
+) -> DialogueResponse:
+    return DialogueResponse(
+        id=dialogue.id,
+        project_id=dialogue.project_id,
+        uploaded_by=dialogue.uploaded_by,
+        original_filename=dialogue.original_filename,
+        content_type=dialogue.content_type,
+        file_size=dialogue.file_size,
+        lead_type=dialogue.lead_type.value,
+        client_name=dialogue.client_name,
+        product=dialogue.product,
+        summary=dialogue.summary,
+        status=dialogue.status.value,
+        error_message=dialogue.error_message,
+        created_at=dialogue.created_at,
+    )
 
 
 async def get_project_for_company(
@@ -50,6 +78,46 @@ async def get_project_for_company(
         )
 
     return project
+
+
+async def get_dialogue_for_user(
+    dialogue_id: int,
+    current_user: User,
+    db: AsyncSession,
+) -> Dialogue:
+    if current_user.role == UserRole.CREATOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view dialogues",
+        )
+
+    query = (
+        select(Dialogue)
+        .join(Project)
+        .where(
+            Dialogue.id == dialogue_id,
+            Project.company_id
+            == current_user.company_id,
+        )
+    )
+
+    if current_user.role == UserRole.SALES:
+        query = query.where(
+            Dialogue.uploaded_by
+            == current_user.id
+        )
+
+    result = await db.execute(query)
+
+    dialogue = result.scalar_one_or_none()
+
+    if dialogue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dialogue not found",
+        )
+
+    return dialogue
 
 
 @router.post(
@@ -79,14 +147,29 @@ async def upload_dialogue(
         db=db,
     )
 
-    storage_key, file_size = await save_upload_file(file)
+    original_filename = (
+        file.filename or "unknown"
+    )
+
+    content_type = (
+        file.content_type
+        or "application/octet-stream"
+    )
+
+    storage_key, file_size = (
+        await upload_file_to_storage(
+            file=file,
+            company_id=current_user.company_id,
+            project_id=project_id,
+        )
+    )
 
     dialogue = Dialogue(
         project_id=project_id,
         uploaded_by=current_user.id,
-        original_filename=file.filename or "unknown",
+        original_filename=original_filename,
         storage_key=storage_key,
-        content_type=file.content_type or "application/octet-stream",
+        content_type=content_type,
         file_size=file_size,
         lead_type=lead_type,
         client_name=client_name,
@@ -103,22 +186,15 @@ async def upload_dialogue(
 
     except Exception:
         await db.rollback()
+
+        await delete_file_from_storage(
+            storage_key
+        )
+
         raise
 
-    return DialogueResponse(
-        id=dialogue.id,
-        project_id=dialogue.project_id,
-        uploaded_by=dialogue.uploaded_by,
-        original_filename=dialogue.original_filename,
-        content_type=dialogue.content_type,
-        file_size=dialogue.file_size,
-        lead_type=dialogue.lead_type.value,
-        client_name=dialogue.client_name,
-        product=dialogue.product,
-        summary=dialogue.summary,
-        status=dialogue.status.value,
-        error_message=dialogue.error_message,
-        created_at=dialogue.created_at,
+    return build_dialogue_response(
+        dialogue
     )
 
 
@@ -128,7 +204,9 @@ async def upload_dialogue(
 )
 async def get_project_dialogues(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     if current_user.role == UserRole.CREATOR:
@@ -148,12 +226,15 @@ async def get_project_dialogues(
         .where(
             Dialogue.project_id == project_id,
         )
-        .order_by(Dialogue.created_at.desc())
+        .order_by(
+            Dialogue.created_at.desc()
+        )
     )
 
     if current_user.role == UserRole.SALES:
         query = query.where(
-            Dialogue.uploaded_by == current_user.id
+            Dialogue.uploaded_by
+            == current_user.id
         )
 
     result = await db.execute(query)
@@ -161,21 +242,7 @@ async def get_project_dialogues(
     dialogues = result.scalars().all()
 
     return [
-        DialogueResponse(
-            id=dialogue.id,
-            project_id=dialogue.project_id,
-            uploaded_by=dialogue.uploaded_by,
-            original_filename=dialogue.original_filename,
-            content_type=dialogue.content_type,
-            file_size=dialogue.file_size,
-            lead_type=dialogue.lead_type.value,
-            client_name=dialogue.client_name,
-            product=dialogue.product,
-            summary=dialogue.summary,
-            status=dialogue.status.value,
-            error_message=dialogue.error_message,
-            created_at=dialogue.created_at,
-        )
+        build_dialogue_response(dialogue)
         for dialogue in dialogues
     ]
 
@@ -186,51 +253,47 @@ async def get_project_dialogues(
 )
 async def get_dialogue(
     dialogue_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user
+    ),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user.role == UserRole.CREATOR:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to view dialogues",
-        )
-
-    query = (
-        select(Dialogue)
-        .join(Project)
-        .where(
-            Dialogue.id == dialogue_id,
-            Project.company_id == current_user.company_id,
-        )
+    dialogue = await get_dialogue_for_user(
+        dialogue_id=dialogue_id,
+        current_user=current_user,
+        db=db,
     )
 
-    if current_user.role == UserRole.SALES:
-        query = query.where(
-            Dialogue.uploaded_by == current_user.id
-        )
+    return build_dialogue_response(
+        dialogue
+    )
 
-    result = await db.execute(query)
 
-    dialogue = result.scalar_one_or_none()
+@router.get(
+    "/dialogues/{dialogue_id}/download-url",
+    response_model=DialogueDownloadUrlResponse,
+)
+async def get_dialogue_download_url(
+    dialogue_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    dialogue = await get_dialogue_for_user(
+        dialogue_id=dialogue_id,
+        current_user=current_user,
+        db=db,
+    )
 
-    if dialogue is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dialogue not found",
-        )
+    url = await generate_download_url(
+        dialogue.storage_key
+    )
 
-    return DialogueResponse(
-        id=dialogue.id,
-        project_id=dialogue.project_id,
-        uploaded_by=dialogue.uploaded_by,
-        original_filename=dialogue.original_filename,
-        content_type=dialogue.content_type,
-        file_size=dialogue.file_size,
-        lead_type=dialogue.lead_type.value,
-        client_name=dialogue.client_name,
-        product=dialogue.product,
-        summary=dialogue.summary,
-        status=dialogue.status.value,
-        error_message=dialogue.error_message,
-        created_at=dialogue.created_at,
+    return DialogueDownloadUrlResponse(
+        url=url,
+        expires_in=(
+            settings
+            .S3_PRESIGNED_URL_EXPIRE_SECONDS
+        ),
     )
