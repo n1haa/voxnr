@@ -10,6 +10,7 @@ from app.db.database import Base
 
 if TYPE_CHECKING:
     from app.models.company import Company
+    from app.models.dialogue import Dialogue
 
 
 class UserRole(str, enum.Enum):
@@ -65,4 +66,8 @@ class User(Base):
 
     company: Mapped["Company"] = relationship(
         back_populates="users",
+    )
+
+    dialogues: Mapped[list["Dialogue"]] = relationship(
+        back_populates="uploader",
     )

@@ -9,6 +9,7 @@ from app.db.database import Base
 
 if TYPE_CHECKING:
     from app.models.company import Company
+    from app.models.dialogue import Dialogue
 
 
 class Project(Base):
@@ -50,4 +51,9 @@ class Project(Base):
 
     company: Mapped["Company"] = relationship(
         back_populates="projects",
+    )
+
+    dialogues: Mapped[list["Dialogue"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
     )
